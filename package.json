@@ -1,0 +1,32 @@
+{
+  "name": "instagram_bot",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "wrangler": "bun run scripts/wrangler.ts",
+    "dev": "bun run scripts/wrangler.ts dev",
+    "deploy": "bun run scripts/wrangler.ts deploy",
+    "release": "bun run scripts/release.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "cf-typegen": "bun run scripts/wrangler.ts types",
+    "smoke:d1": "bun run scripts/d1-smoke.ts",
+    "backfill:comments": "bun run scripts/backfill-comments.ts",
+    "backfill:account-comments": "bun run scripts/backfill-account-comments.ts",
+    "reply:comment": "bun run scripts/send-comment-reply.ts",
+    "data:redact": "bun run scripts/data-redact.ts",
+    "bot:status": "bun run scripts/bot-status.ts"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260505.1",
+    "@types/bun": "latest",
+    "drizzle-kit": "^0.31.10",
+    "typescript": "^6.0.3",
+    "wrangler": "^4.100.0"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.12.16",
+    "zod": "^4.4.3"
+  }
+}

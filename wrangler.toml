@@ -1,0 +1,47 @@
+name = "instagram-bot"
+main = "src/index.ts"
+compatibility_date = "2026-05-05"
+workers_dev = true
+preview_urls = false
+
+[observability]
+enabled = true
+
+[vars]
+APP_ENV = "development"
+PUBLIC_BASE_URL = ""
+LOG_LEVEL = "info"
+META_GRAPH_API_VERSION = "v25.0"
+INSTAGRAM_USERNAME = ""
+BOT_ENABLED = "false"
+DM_AUTOREPLY_ENABLED = "false"
+COMMENT_PRIVATE_REPLY_ENABLED = "false"
+BACKFILL_REPLY_ENABLED = "false"
+COMMENT_PUBLIC_REPLY_ENABLED = "false"
+BACKFILL_PRIVATE_REPLY_MAX_AGE_DAYS = "7"
+BACKFILL_MAX_PAGES_PER_RUN = "25"
+MAX_REPLY_ATTEMPTS = "3"
+RATE_LIMIT_MESSAGES_PER_MINUTE = "30"
+RECONCILER_ENABLED = "true"
+RECONCILER_INTERVAL_MINUTES = "10"
+RECONCILER_MEDIA_LIMIT = "10"
+RECONCILER_MAX_COMMENT_PAGES_PER_MEDIA = "3"
+RECONCILER_LOOKBACK_HOURS = "24"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "instagram_bot"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[[queues.producers]]
+binding = "WEBHOOK_QUEUE"
+queue = "instagram-bot-jobs"
+
+[[queues.consumers]]
+queue = "instagram-bot-jobs"
+max_batch_size = 10
+max_batch_timeout = 5
+
+[triggers]
+crons = ["* * * * *"]
