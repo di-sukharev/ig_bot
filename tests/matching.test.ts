@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { isPrivateReplyEligible, matchKeyword } from "../src/comments/matching";
+import {
+  isPrivateReplyEligible,
+  matchCommentKeyword,
+  matchKeyword,
+} from "../src/comments/matching";
 
 describe("keyword matching", () => {
   test("matches case-insensitive words and phrases as normalized substrings", () => {
@@ -15,6 +19,35 @@ describe("keyword matching", () => {
   test("matches emoji with or without variation selectors", () => {
     expect(matchKeyword("🐿", ["🐿️"]).matched).toBe(true);
     expect(matchKeyword("🐿️", ["🐿"]).matched).toBe(true);
+  });
+
+  test("matches one-word comments with any number of emoji", () => {
+    expect(matchCommentKeyword("РЕВЬЮ!!! 🔥🙌", ["ревью"]).keyword).toBe("ревью");
+    expect(matchCommentKeyword("🔥 🔥🔥", ["🔥"]).matched).toBe(true);
+    expect(matchCommentKeyword("хочу ℹ️", ["хочу"]).matched).toBe(true);
+    expect(matchCommentKeyword("ℹ️ ℹ️", ["ℹ️"]).matched).toBe(true);
+    expect(matchCommentKeyword("хочу 1️⃣2️⃣", ["хочу"]).matched).toBe(true);
+  });
+
+  test("does not match keywords inside comments with multiple words", () => {
+    expect(
+      matchCommentKeyword("можно сделать ревью пожалуйста", ["ревью"]),
+    ).toEqual({ matched: false });
+    expect(matchCommentKeyword("хочу🔥программу", ["хочу"])).toEqual({
+      matched: false,
+    });
+    expect(matchCommentKeyword("я1️⃣хочу", ["хочу"])).toEqual({
+      matched: false,
+    });
+    expect(matchCommentKeyword("хочу-программу", ["хочу"])).toEqual({
+      matched: false,
+    });
+    expect(matchCommentKeyword("хочу_программу", ["хочу"])).toEqual({
+      matched: false,
+    });
+    expect(matchCommentKeyword("хочу’программу", ["хочу"])).toEqual({
+      matched: false,
+    });
   });
 });
 

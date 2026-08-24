@@ -136,6 +136,11 @@ Fields:
 
 At least one of `public` or `private` must be present. Direct replies use only `private`.
 
+Automatic comment replies only match comments with at most one word made of letters or
+digits. Emoji and punctuation do not count as words, so `хочу 🔥🙌` is accepted,
+while `я хочу программу` is ignored. This restriction applies to comments only;
+inbound Direct messages keep the configured phrase-matching behavior.
+
 For production, keep private production wording in ignored `config/reply-rules.production.json`. The deploy wrapper copies it into the temporary deploy workspace as `config/reply-rules.json`, so public files are not mutated.
 
 ## Environment

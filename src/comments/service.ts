@@ -10,7 +10,7 @@ import type {
   ReplyJobRecord,
   ReplyJobType,
 } from "../types";
-import { isPrivateReplyEligible, matchKeyword } from "./matching";
+import { isPrivateReplyEligible, matchCommentKeyword } from "./matching";
 import {
   basicCommentReplySkipReason,
   getConversationStatus,
@@ -48,7 +48,7 @@ export async function processComment(input: {
   sendImmediately?: boolean;
   processingSource?: CommentProcessingSource;
 }): Promise<ProcessCommentResult> {
-  const match = matchKeyword(input.comment.text, input.config.commentKeywords);
+  const match = matchCommentKeyword(input.comment.text, input.config.commentKeywords);
   const eligible = isPrivateReplyEligible(
     input.comment.createdAt,
     input.now,

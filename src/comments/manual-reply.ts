@@ -2,7 +2,7 @@ import type { AppConfig } from "../env";
 import type { BotRepository } from "../db/repository";
 import type { MetaGraphClient } from "../meta/client";
 import type { CommentRecord, ReplyJobRecord } from "../types";
-import { isPrivateReplyEligible, matchKeyword } from "./matching";
+import { isPrivateReplyEligible, matchCommentKeyword } from "./matching";
 import {
   basicCommentReplySkipReason,
   getConversationStatus,
@@ -110,7 +110,7 @@ async function manualReplySkippedReason(input: {
   now: Date;
   force: boolean;
 }): Promise<string | undefined> {
-  const match = matchKeyword(input.comment.text, input.config.commentKeywords);
+  const match = matchCommentKeyword(input.comment.text, input.config.commentKeywords);
   const basicSkipReason = basicCommentReplySkipReason({
     comment: input.comment,
     config: input.config,

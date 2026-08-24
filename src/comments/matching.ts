@@ -3,6 +3,11 @@ export interface KeywordMatch {
   keyword?: string;
 }
 
+const COMMENT_EMOJI_PATTERN =
+  /(?:[#*0-9]\uFE0F?\u20E3|\p{Extended_Pictographic})/gu;
+const MEANINGFUL_WORD_PATTERN =
+  /[\p{L}\p{N}][\p{L}\p{M}\p{N}]*/gu;
+
 export function matchKeyword(text: string | undefined, keywords: string[]): KeywordMatch {
   const normalizedText = normalizeForMatching(text);
   if (!normalizedText) {
@@ -17,6 +22,17 @@ export function matchKeyword(text: string | undefined, keywords: string[]): Keyw
   }
 
   return { matched: false };
+}
+
+export function matchCommentKeyword(
+  text: string | undefined,
+  keywords: string[],
+): KeywordMatch {
+  if (!hasAtMostOneMeaningfulWord(text)) {
+    return { matched: false };
+  }
+
+  return matchKeyword(text, keywords);
 }
 
 export function parseKeywordList(value: string | undefined): string[] {
@@ -59,4 +75,10 @@ export function normalizeForMatching(value: string | undefined): string {
     .replace(/[\uFE0E\uFE0F]/g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function hasAtMostOneMeaningfulWord(value: string | undefined): boolean {
+  const textWithoutEmoji = value?.replace(COMMENT_EMOJI_PATTERN, " ") ?? "";
+  const words = textWithoutEmoji.match(MEANINGFUL_WORD_PATTERN);
+  return (words?.length ?? 0) <= 1;
 }

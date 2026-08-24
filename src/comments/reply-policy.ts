@@ -1,6 +1,6 @@
 import type { AppConfig } from "../env";
 import type { CommentRecord, NormalizedComment, ReplyJobType } from "../types";
-import { matchKeyword } from "./matching";
+import { matchCommentKeyword } from "./matching";
 import { findCommentReplyRule, type CommentReplyRule } from "./reply-rules";
 
 export type ConversationStatus = "clear" | "exists" | "unknown";
@@ -119,7 +119,8 @@ export function getMatchedReplyRuleForComment(
   comment: ReplyRuleComment,
 ): CommentReplyRule | undefined {
   const matchedKeyword =
-    comment.matchedKeyword ?? matchKeyword(comment.text, config.commentKeywords).keyword;
+    comment.matchedKeyword ??
+    matchCommentKeyword(comment.text, config.commentKeywords).keyword;
   return findCommentReplyRule(config.commentReplyRules, matchedKeyword);
 }
 

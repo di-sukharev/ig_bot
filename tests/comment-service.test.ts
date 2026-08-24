@@ -3,6 +3,7 @@ import type { AppConfig } from "../src/env";
 import type { BotRepository } from "../src/db/repository";
 import { MetaApiError, type MetaGraphClient } from "../src/meta/client";
 import { processComment, processReplyJob } from "../src/comments/service";
+import { getMatchedReplyRuleForComment } from "../src/comments/reply-policy";
 import {
   buildCommentReplyRules,
   getCommentReplyKeywords,
@@ -21,7 +22,7 @@ describe("comment processing", () => {
     const repo = new FakeRepo();
     const meta = new FakeMetaClient();
     const result = await processComment({
-      comment: comment({ text: "хочу программу" }),
+      comment: comment({ text: "хочу" }),
       config: config(),
       repo: repo as unknown as BotRepository,
       metaClient: meta as unknown as MetaGraphClient,
@@ -37,11 +38,35 @@ describe("comment processing", () => {
     );
   });
 
+  test("does not match a keyword separated from another word by emoji", async () => {
+    const repo = new FakeRepo();
+    const meta = new FakeMetaClient();
+    const result = await processComment({
+      comment: comment({ text: "я🔥хочу" }),
+      config: config(),
+      repo: repo as unknown as BotRepository,
+      metaClient: meta as unknown as MetaGraphClient,
+      now: new Date("2026-05-05T12:00:00.000Z"),
+      allowReplies: true,
+    });
+
+    expect(result).toEqual({
+      inserted: true,
+      matched: false,
+      replyJobCreated: false,
+      sent: false,
+      skippedReason: "no_keyword",
+    });
+    expect(repo.comments.get("comment_1")?.matchedKeyword).toBeUndefined();
+    expect(repo.jobs.size).toBe(0);
+    expect(meta.conversationChecks).toEqual([]);
+  });
+
   test("sends public and private replies only when no conversation exists", async () => {
     const repo = new FakeRepo();
     const meta = new FakeMetaClient();
     const result = await processComment({
-      comment: comment({ text: "хочу программу" }),
+      comment: comment({ text: "хочу" }),
       config: config({
         COMMENT_PUBLIC_REPLY_ENABLED: "true",
       }),
@@ -85,7 +110,7 @@ describe("comment processing", () => {
     );
 
     await processComment({
-      comment: comment({ text: "большое спасибо" }),
+      comment: comment({ text: "спасибо" }),
       config: rules,
       repo: repo as unknown as BotRepository,
       metaClient: meta as unknown as MetaGraphClient,
@@ -108,7 +133,7 @@ describe("comment processing", () => {
     meta.existingConversation = true;
 
     const result = await processComment({
-      comment: comment({ text: "хочу программу" }),
+      comment: comment({ text: "хочу" }),
       config: config({
         COMMENT_PUBLIC_REPLY_ENABLED: "true",
       }),
@@ -171,7 +196,7 @@ describe("comment processing", () => {
     const repo = new FakeRepo();
     const meta = new FakeMetaClient();
     const base = {
-      comment: comment({ text: "хочу программу" }),
+      comment: comment({ text: "хочу" }),
       config: config(),
       repo: repo as unknown as BotRepository,
       metaClient: meta as unknown as MetaGraphClient,
@@ -190,7 +215,7 @@ describe("comment processing", () => {
     const repo = new FakeRepo();
     const meta = new FakeMetaClient();
     const result = await processComment({
-      comment: comment({ text: "хочу программу" }),
+      comment: comment({ text: "хочу" }),
       config: config({
         COMMENT_PUBLIC_REPLY_ENABLED: "true",
       }),
@@ -226,7 +251,7 @@ describe("comment processing", () => {
     );
 
     await processComment({
-      comment: comment({ text: "хочу программу" }),
+      comment: comment({ text: "хочу" }),
       config: originalConfig,
       repo: repo as unknown as BotRepository,
       metaClient: meta as unknown as MetaGraphClient,
@@ -264,7 +289,7 @@ describe("comment processing", () => {
     const repo = new FakeRepo();
     const meta = new FakeMetaClient();
     const result = await processComment({
-      comment: comment({ text: "хочу программу" }),
+      comment: comment({ text: "хочу" }),
       config: config({
         COMMENT_PRIVATE_REPLY_ENABLED: "false",
         COMMENT_PUBLIC_REPLY_ENABLED: "true",
@@ -310,7 +335,7 @@ describe("comment processing", () => {
     const repo = new FakeRepo();
     const meta = new FakeMetaClient();
     const result = await processComment({
-      comment: comment({ text: "хочу программу", commentKind: "live" }),
+      comment: comment({ text: "хочу", commentKind: "live" }),
       config: config(),
       repo: repo as unknown as BotRepository,
       metaClient: meta as unknown as MetaGraphClient,
@@ -329,7 +354,7 @@ describe("comment processing", () => {
     const repo = new FakeRepo();
     const meta = new FakeMetaClient();
     const result = await processComment({
-      comment: comment({ text: "хочу программу", commenterId: undefined }),
+      comment: comment({ text: "хочу", commenterId: undefined }),
       config: config(),
       repo: repo as unknown as BotRepository,
       metaClient: meta as unknown as MetaGraphClient,
@@ -368,7 +393,7 @@ describe("comment processing", () => {
     const repo = new FakeRepo();
     const meta = new FakeMetaClient();
     const result = await processComment({
-      comment: comment({ text: "хочу программу" }),
+      comment: comment({ text: "хочу" }),
       config: config({ BOT_ENABLED: "false" }),
       repo: repo as unknown as BotRepository,
       metaClient: meta as unknown as MetaGraphClient,
@@ -1007,7 +1032,7 @@ describe("comment processing", () => {
     meta.conversationError = new Error("conversation timeout");
 
     const result = await processComment({
-      comment: comment({ text: "хочу программу" }),
+      comment: comment({ text: "хочу" }),
       config: config(),
       repo: repo as unknown as BotRepository,
       metaClient: meta as unknown as MetaGraphClient,
@@ -1040,6 +1065,24 @@ describe("comment processing", () => {
     expect(meta.privateReplies).toEqual([
       { commentId: "comment_1", text: "reply" },
     ]);
+  });
+});
+
+describe("stored comment reply rule fallback", () => {
+  test("does not recover an always rule from a multi-word comment", () => {
+    const rules = configWithRules([
+      ["хочу", { private: "reply", always: true }],
+    ]);
+
+    expect(
+      getMatchedReplyRuleForComment(
+        rules,
+        commentRecord({
+          text: "я хочу программу",
+          matchedKeyword: undefined,
+        }),
+      ),
+    ).toBeUndefined();
   });
 });
 

@@ -229,6 +229,36 @@ describe("admin manual replies", () => {
     });
   });
 
+  test("rejects manual replies for multi-word comments containing a keyword", async () => {
+    const app = createApp();
+    const db = await createSqliteD1();
+    insertComment(db, {
+      id: "comment_keyword_in_sentence",
+      text: "это мой 🔥 комментарий",
+    });
+
+    const response = await app.fetch(
+      new Request(
+        "http://worker.test/admin/reply/comment/comment_keyword_in_sentence",
+        {
+          method: "POST",
+          headers: { Authorization: "Bearer admin" },
+        },
+      ),
+      env(db),
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: "reply_not_allowed",
+      skippedReason: "no_keyword",
+    });
+    expect(db.first<{ count: number }>("SELECT COUNT(*) as count FROM reply_jobs")).toEqual({
+      count: 0,
+    });
+  });
+
   test("sends a guarded manual reply for an eligible stored comment", async () => {
     const app = createApp();
     const db = await createSqliteD1();
