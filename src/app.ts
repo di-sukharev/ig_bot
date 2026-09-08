@@ -4,6 +4,8 @@ import { runBackfill } from "./comments/backfill";
 import { sendManualCommentReply } from "./comments/manual-reply";
 import { DrizzleRepository, type DataSubjectSelector } from "./db/repository";
 import { MetaGraphClient } from "./meta/client";
+import { TokenRepository } from "./db/token-repository";
+import { resolveTokenConfig, tokenStatus } from "./meta/token-lifecycle";
 import type { WorkerEnv } from "./types";
 import { buildWebhookEventKey } from "./webhook/normalize";
 import { verifyInstagramSignature } from "./webhook/signature";
@@ -134,6 +136,7 @@ export function createApp() {
     return c.json({
       ok: true,
       accountStatus,
+      tokenLifecycle: await tokenStatus(config, new TokenRepository(c.env.DB), now),
       config: getPublicConfig(config),
       webhookEvents: await repo.getWebhookEventStatusCounts(),
       replyJobs: {
@@ -175,8 +178,15 @@ export function createApp() {
     return c.json({ ok: true, ...result });
   });
 
+  app.get("/admin/media", async (c) => {
+    const config = await resolveTokenConfig(getConfig(c.env), new TokenRepository(c.env.DB));
+    const page = await new MetaGraphClient(config).getMedia(c.req.query("after"));
+    // Meta pagination URLs can contain access tokens. Clients only need the cursor.
+    return c.json({ data: page.data ?? [], paging: { cursors: page.paging?.cursors } });
+  });
+
   app.post("/admin/backfill/media/:mediaId", async (c) => {
-    const config = getConfig(c.env);
+    const config = await resolveTokenConfig(getConfig(c.env), new TokenRepository(c.env.DB));
     const mediaId = c.req.param("mediaId");
     const send = c.req.query("send") === "1" || c.req.query("send") === "true";
     const afterCursor = c.req.query("after");
@@ -196,7 +206,7 @@ export function createApp() {
   });
 
   app.post("/admin/reply/comment/:commentId", async (c) => {
-    const config = getConfig(c.env);
+    const config = await resolveTokenConfig(getConfig(c.env), new TokenRepository(c.env.DB));
     const now = new Date();
     const repo = new DrizzleRepository(c.env.DB);
     const commentId = c.req.param("commentId");

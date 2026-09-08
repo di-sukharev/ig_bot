@@ -170,6 +170,37 @@ export class MetaGraphClient {
     );
   }
 
+  async refreshAccessToken(): Promise<{ accessToken: string; expiresIn: number }> {
+    const url = new URL("/refresh_access_token", this.config.metaGraphApiBaseUrl);
+    url.searchParams.set("grant_type", "ig_refresh_token");
+    url.searchParams.set("access_token", this.config.instagramAccessToken);
+    let response: Response;
+    let body: unknown;
+    try {
+      response = await this.fetchFn(url.toString(), { signal: AbortSignal.timeout(20_000) });
+      body = await response.json();
+    } catch {
+      // Fetch exceptions may include the URL, which contains a credential.
+      throw new Error("Instagram token refresh network or response error");
+    }
+    if (!response.ok) {
+      const error = isRecord(body) && isRecord(body.error) ? body.error : {};
+      const code = readNumber(error.code);
+      const message = `Instagram token refresh failed (HTTP ${response.status}, code ${code ?? "unknown"})`;
+      throw new MetaApiError({
+        message, httpStatus: response.status, metaCode: code,
+        metaSubcode: readNumber(error.error_subcode),
+        responseSummary: message, retryable: isRetryable(response.status, code),
+      });
+    }
+    if (!isRecord(body) || typeof body.access_token !== "string" || !body.access_token.trim()
+      || typeof body.expires_in !== "number" || !Number.isSafeInteger(body.expires_in)
+      || body.expires_in <= 0 || body.expires_in > 366 * 24 * 60 * 60) {
+      throw new Error("Instagram token refresh returned invalid token or lifetime");
+    }
+    return { accessToken: body.access_token, expiresIn: body.expires_in };
+  }
+
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const url = new URL(
       `${this.config.metaGraphApiBaseUrl}/${this.config.metaGraphApiVersion}${path}`,

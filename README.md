@@ -155,7 +155,10 @@ Important values:
 - `META_GRAPH_API_VERSION` - defaults to `v25.0`.
 - `INSTAGRAM_ACCOUNT_ID` - connected Instagram account ID.
 - `INSTAGRAM_USERNAME` - connected Instagram username, used to avoid replying to yourself.
-- `INSTAGRAM_ACCESS_TOKEN` - token used for Graph API calls.
+- `INSTAGRAM_ACCESS_TOKEN` - initial long-lived Instagram Login token; a manual replacement supersedes the saved token.
+- `INSTAGRAM_TOKEN_AUTO_REFRESH_ENABLED` - enables renewal through the existing minute Cron (default `false`).
+- `INSTAGRAM_TOKEN_ENCRYPTION_KEY` - base64-encoded random 32-byte AES key, required when renewal is enabled; keep it in Worker secrets.
+- `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` - optional token alerts; both must be configured to send notifications.
 - `BOT_ENABLED` - global send switch.
 - `DM_AUTOREPLY_ENABLED` - enables Direct auto-replies.
 - `COMMENT_PRIVATE_REPLY_ENABLED` - enables private replies to comments.
@@ -199,6 +202,50 @@ bun run wrangler secret put INSTAGRAM_ACCESS_TOKEN --config wrangler.production.
 ```
 
 Depending on your setup, you may also keep `INSTAGRAM_ACCOUNT_ID`, `INSTAGRAM_USERNAME`, and token expiry metadata as Wrangler vars or secrets.
+
+### Automatic Instagram token renewal
+
+Apply migration `0004_instagram_token_refresh.sql` before deploying this feature. Generate a random
+32-byte key (for example, `openssl rand -base64 32`), retain it securely, and upload it with
+`bun run wrangler secret put INSTAGRAM_TOKEN_ENCRYPTION_KEY --config wrangler.production.toml`.
+Set `INSTAGRAM_TOKEN_AUTO_REFRESH_ENABLED = "true"` in the production Wrangler vars, then deploy.
+Local development uses its own D1 state and should leave renewal disabled for the production account.
+
+The minute Cron saves the initial token encrypted with AES-GCM in `instagram_accounts.token_state`.
+The first refresh is scheduled 25 hours after initialization, respecting Meta's minimum token age
+of 24 hours. Subsequent refreshes normally run every 30 days. The returned `expires_in` determines
+the exact expiry, also stored in `token_expires_at`; expiry remains unknown before the first success
+unless `INSTAGRAM_ACCESS_TOKEN_EXPIRES_AT` was supplied as an ISO timestamp.
+
+All Worker Graph calls and the account backfill CLI use the saved token. The CLI lists media through
+the authenticated `/admin/media` endpoint, so it does not need a local Instagram token.
+Renewal does not rewrite `.env` or the bootstrap Worker secret. Keep the encryption key across
+deployments. Disabling renewal while retaining the key continues to use the saved token.
+To recover from revocation, obtain a new long-lived token and upload it as `INSTAGRAM_ACCESS_TOKEN`;
+the changed secret is detected automatically. An unchanged `INSTAGRAM_ACCESS_TOKEN_EXPIRES_AT`
+belongs to the previous bootstrap and is ignored for the replacement; expiry stays unknown until
+the first refresh unless a different expiry is supplied with the new token. Existing token state
+from versions without a bootstrap expiry marker also starts with unknown expiry on replacement.
+Previously used bootstrap fingerprints are retained so a late Cron from an older deployment cannot
+restore a retired token; callers from that deployment use the saved current token. Always obtain a
+fresh token when reconnecting instead of restoring an earlier bootstrap secret.
+If replacing the encryption key, also supply a fresh
+bootstrap token in the same deployment; the old encrypted state cannot be decrypted with a new key.
+
+Refreshes use a five-minute lease and conditional D1 writes to prevent overlapping Crons or stale
+responses from overwriting newer state. Temporary failures retain the current token and retry after
+5, 10, 20 minutes and so on, capped at six hours. Expired/rejected tokens require a fresh login;
+they cannot be renewed automatically. Health checks also detect Meta error `190` with HTTP `400`.
+
+`GET /admin/status` reports `tokenLifecycle` (expiry, next refresh, failures, last attempt,
+`requiresReauth`, and `needsAttention`) without exposing credentials or ciphertext. Optional Telegram
+alerts fire on required reauthentication, three consecutive refresh failures, or expiry within
+seven days. Alerts repeat at most once per day; failed delivery retries after an hour. With either
+Telegram setting missing, notifications are disabled and status remains available in the admin API.
+
+This uses [Meta's Instagram Login refresh endpoint](https://developers.facebook.com/docs/instagram-platform/reference/refresh_access_token/)
+with `grant_type=ig_refresh_token`, for a valid long-lived token with `instagram_business_basic`.
+See also [Instagram Business Login](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login/).
 
 ## Database
 
@@ -272,6 +319,7 @@ Routes:
 - `GET /webhooks/instagram`
 - `POST /webhooks/instagram`
 - `GET /admin/status`
+- `GET /admin/media` (optional `after` cursor; used by account backfill)
 - `POST /admin/backfill/media/:mediaId`
 - `POST /admin/reply/comment/:commentId`
 - `GET /admin/data-subject`

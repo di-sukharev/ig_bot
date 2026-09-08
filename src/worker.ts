@@ -5,6 +5,8 @@ import { processReplyJob, processComment } from "./comments/service";
 import { processDirectMessage } from "./direct/service";
 import { DrizzleRepository, type BotRepository } from "./db/repository";
 import { MetaApiError, MetaGraphClient } from "./meta/client";
+import { TokenRepository } from "./db/token-repository";
+import { maintainToken, reportTokenInvalid, resolveTokenConfig } from "./meta/token-lifecycle";
 import type { ReconcilerRunSummary } from "./types";
 import type {
   NormalizedComment,
@@ -23,7 +25,7 @@ export async function processWebhookQueueMessage(
   message: WebhookQueueMessage,
   now = new Date(),
 ): Promise<void> {
-  const config = getConfig(env);
+  const config = await resolveTokenConfig(getConfig(env), new TokenRepository(env.DB));
   const repo = new DrizzleRepository(env.DB);
   const metaClient = new MetaGraphClient(config);
   const event = await repo.getWebhookEvent(message.webhookEventId);
@@ -104,7 +106,10 @@ export async function queueWebhookDirectMessages(input: {
 }
 
 export async function runScheduledMaintenance(env: WorkerEnv, now = new Date()): Promise<void> {
-  const config = getConfig(env);
+  const sourceConfig = getConfig(env);
+  const tokenRepo = new TokenRepository(env.DB);
+  await maintainToken(sourceConfig, tokenRepo, now);
+  const config = await resolveTokenConfig(sourceConfig, tokenRepo);
   const repo = new DrizzleRepository(env.DB);
   const metaClient = new MetaGraphClient(config);
   await runScheduledMaintenanceWithDependencies({
@@ -112,6 +117,7 @@ export async function runScheduledMaintenance(env: WorkerEnv, now = new Date()):
     repo,
     metaClient,
     webhookQueue: env.WEBHOOK_QUEUE,
+    onTokenInvalid: () => reportTokenInvalid(sourceConfig, tokenRepo, config.instagramAccessToken, now),
     now,
   });
 }
@@ -121,13 +127,14 @@ export async function runScheduledMaintenanceWithDependencies(input: {
   repo: BotRepository;
   metaClient: MetaGraphClient;
   webhookQueue?: Queue<WebhookQueueMessage>;
+  onTokenInvalid?: () => Promise<void>;
   now: Date;
 }): Promise<void> {
   const { config, repo, metaClient, now } = input;
   let canDrain = true;
 
   if (shouldRunTokenHealth(now)) {
-    canDrain = await runTokenHealthCheck({ repo, metaClient, config, now });
+    canDrain = await runTokenHealthCheck({ repo, metaClient, config, now, onTokenInvalid: input.onTokenInvalid });
   }
 
   await repo.redactExpiredWebhookPayloads(now.toISOString(), 100);
@@ -174,6 +181,7 @@ export async function runTokenHealthCheck(input: {
   metaClient: MetaGraphClient;
   config: AppConfig;
   now: Date;
+  onTokenInvalid?: () => Promise<void>;
 }): Promise<boolean> {
   try {
     await input.metaClient.tokenHealth();
@@ -190,6 +198,7 @@ export async function runTokenHealthCheck(input: {
         "token_invalid",
         input.now.toISOString(),
       );
+      await input.onTokenInvalid?.();
       return false;
     }
 
@@ -273,5 +282,5 @@ export async function runFreshCommentReconciler(input: {
 }
 
 function isAuthError(error: unknown): boolean {
-  return error instanceof MetaApiError && (error.httpStatus === 401 || error.httpStatus === 403);
+  return error instanceof MetaApiError && (error.httpStatus === 401 || error.httpStatus === 403 || error.metaCode === 190);
 }

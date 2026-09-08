@@ -9,9 +9,6 @@ import {
 interface AccountBackfillCliOptions extends AccountBackfillOptions {
   baseUrl: string;
   adminApiKey: string;
-  instagramAccountId: string;
-  instagramAccessToken: string;
-  graphApiVersion: string;
 }
 
 const options = parseOptions();
@@ -68,9 +65,6 @@ function parseOptions(args: string[] = Bun.argv.slice(2)): AccountBackfillCliOpt
     send,
     baseUrl: baseUrl.replace(/\/$/, ""),
     adminApiKey: process.env.ADMIN_API_KEY ?? "",
-    instagramAccountId: requireEnv("INSTAGRAM_ACCOUNT_ID"),
-    instagramAccessToken: requireEnv("INSTAGRAM_ACCESS_TOKEN"),
-    graphApiVersion: process.env.META_GRAPH_API_VERSION || "v25.0",
     maxMediaPages,
     maxCommentPages,
     afterCursor,
@@ -81,18 +75,14 @@ async function getMediaPage(
   options: AccountBackfillCliOptions,
   afterCursor: string | undefined,
 ): Promise<MediaPage> {
-  const url = new URL(
-    `https://graph.instagram.com/${options.graphApiVersion}/${options.instagramAccountId}/media`,
-  );
-  url.searchParams.set("fields", "id,timestamp,media_type");
-  url.searchParams.set("limit", "100");
+  const url = new URL("/admin/media", options.baseUrl);
   if (afterCursor) {
     url.searchParams.set("after", afterCursor);
   }
 
   const response = await fetch(url, {
     headers: {
-      Authorization: `Bearer ${options.instagramAccessToken}`,
+      Authorization: `Bearer ${options.adminApiKey}`,
     },
   });
   const body = await response.text();
@@ -132,14 +122,6 @@ async function runMediaBackfill(
   }
 
   return JSON.parse(body) as BackfillResponse;
-}
-
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`${name} is required`);
-  }
-  return value;
 }
 
 function parsePositiveInteger(value: string | undefined): number | undefined {

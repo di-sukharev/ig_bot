@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Database, type SQLQueryBindings } from "bun:sqlite";
+import { SqliteD1 } from "./helpers/sqlite-d1";
 import { DrizzleRepository } from "../src/db/repository";
 import type { CommentRecord, DirectMessageRecord } from "../src/types";
 
@@ -1015,49 +1015,4 @@ function directMessage(
     raw: {},
     ...overrides,
   };
-}
-
-class SqliteD1 {
-  private readonly db = new Database(":memory:");
-
-  exec(sql: string) {
-    this.db.exec(sql);
-  }
-
-  first<T>(sql: string, ...args: SQLQueryBindings[]): T | null {
-    return this.db.query<T, SQLQueryBindings[]>(sql).get(...args);
-  }
-
-  run(sql: string, ...args: SQLQueryBindings[]) {
-    return this.db.query(sql).run(...args);
-  }
-
-  prepare(sql: string) {
-    const statement = this.db.prepare(sql);
-    return {
-      bind: (...args: SQLQueryBindings[]) => ({
-        all: async () => ({ results: statement.all(...args) }),
-        raw: async () => statement.values(...args),
-        run: async () => {
-          const result = statement.run(...args);
-          return { meta: { changes: result.changes } };
-        },
-      }),
-    };
-  }
-
-  async batch(statements: Array<{ run: () => Promise<unknown> }>) {
-    this.db.exec("BEGIN IMMEDIATE;");
-    try {
-      const results = [];
-      for (const statement of statements) {
-        results.push(await statement.run());
-      }
-      this.db.exec("COMMIT;");
-      return results;
-    } catch (error) {
-      this.db.exec("ROLLBACK;");
-      throw error;
-    }
-  }
 }

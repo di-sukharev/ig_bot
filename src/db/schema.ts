@@ -89,6 +89,7 @@ export const instagramAccounts = sqliteTable(
     id: text("id").primaryKey(),
     status: text("status", { enum: accountStatuses }).notNull().default("active"),
     tokenExpiresAt: text("token_expires_at"),
+    tokenState: text("token_state"),
     updatedAt: text("updated_at").notNull(),
   },
   (table) => [

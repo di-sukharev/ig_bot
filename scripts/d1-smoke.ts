@@ -18,7 +18,8 @@ for (const migrationPath of Array.from(
   await $`sqlite3 ${cleanDb} ".read ${migrationPath}"`.quiet();
 }
 
-const cleanSchema = await $`sqlite3 ${cleanDb} "PRAGMA table_info(comments); PRAGMA table_info(direct_messages); PRAGMA table_info(webhook_events); PRAGMA table_info(reply_jobs); SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"`.text();
+const cleanSchema = await $`sqlite3 ${cleanDb} "PRAGMA table_info(instagram_accounts); PRAGMA table_info(comments); PRAGMA table_info(direct_messages); PRAGMA table_info(webhook_events); PRAGMA table_info(reply_jobs); SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"`.text();
+assertIncludes(cleanSchema, "token_state");
 assertIncludes(cleanSchema, "comment_kind");
 assertIncludes(cleanSchema, "direct_messages");
 assertIncludes(cleanSchema, "direct_message_id");
@@ -39,12 +40,14 @@ const schema = await $`bunx wrangler d1 execute ${d1DatabaseName} --local --conf
   WHERE type = 'table'
     AND name IN ('webhook_events', 'webhook_event_subjects', 'comments', 'direct_messages', 'reply_jobs', 'comment_processing_decisions', 'reply_attempts', 'reply_rate_limit_slots');
   PRAGMA table_info(comments);
+  PRAGMA table_info(instagram_accounts);
   PRAGMA table_info(direct_messages);
   PRAGMA table_info(webhook_events);
   PRAGMA table_info(reply_jobs);
 `}`.text();
 
 assertIncludes(schema, "webhook_events");
+assertIncludes(schema, "token_state");
 assertIncludes(schema, "webhook_event_subjects");
 assertIncludes(schema, "comments");
 assertIncludes(schema, "direct_messages");
@@ -154,6 +157,7 @@ console.log(
       checked: [
         "clean_sqlite_migrations",
         "wrangler_local_migrations",
+        "instagram_accounts.token_state",
         "comments.comment_kind",
         "direct_messages",
         "comments.last_seen_source",

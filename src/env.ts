@@ -28,7 +28,11 @@ const configSchema = z.object({
   instagramAccountId: z.string().min(1),
   instagramUsername: z.string().optional(),
   instagramAccessToken: z.string().min(1),
-  instagramAccessTokenExpiresAt: z.string().optional(),
+  instagramAccessTokenExpiresAt: z.iso.datetime({ offset: true }).optional(),
+  instagramTokenAutoRefreshEnabled: z.boolean(),
+  instagramTokenEncryptionKey: z.string().regex(/^[A-Za-z0-9+/]{43}=$/, "Expected a base64-encoded 32-byte key").optional(),
+  telegramBotToken: z.string().optional(),
+  telegramChatId: z.string().optional(),
   botEnabled: z.boolean(),
   dmAutoreplyEnabled: z.boolean(),
   commentPrivateReplyEnabled: z.boolean(),
@@ -48,7 +52,8 @@ const configSchema = z.object({
   reconcilerMediaLimit: z.number().int().positive(),
   reconcilerMaxCommentPagesPerMedia: z.number().int().positive(),
   reconcilerLookbackHours: z.number().int().positive(),
-});
+}).refine((config) => !config.instagramTokenAutoRefreshEnabled || !!config.instagramTokenEncryptionKey,
+  "INSTAGRAM_TOKEN_ENCRYPTION_KEY is required for automatic token refresh");
 
 export type AppConfig = z.infer<typeof configSchema>;
 
@@ -70,6 +75,10 @@ export function getConfig(env: WorkerEnv): AppConfig {
     instagramUsername: emptyToUndefined(env.INSTAGRAM_USERNAME),
     instagramAccessToken: env.INSTAGRAM_ACCESS_TOKEN ?? "",
     instagramAccessTokenExpiresAt: emptyToUndefined(env.INSTAGRAM_ACCESS_TOKEN_EXPIRES_AT),
+    instagramTokenAutoRefreshEnabled: parseBoolean(env.INSTAGRAM_TOKEN_AUTO_REFRESH_ENABLED, false),
+    instagramTokenEncryptionKey: emptyToUndefined(env.INSTAGRAM_TOKEN_ENCRYPTION_KEY),
+    telegramBotToken: emptyToUndefined(env.TELEGRAM_BOT_TOKEN),
+    telegramChatId: emptyToUndefined(env.TELEGRAM_CHAT_ID),
     botEnabled: parseBoolean(env.BOT_ENABLED, true),
     dmAutoreplyEnabled: parseBoolean(env.DM_AUTOREPLY_ENABLED, false),
     commentPrivateReplyEnabled,
@@ -129,6 +138,8 @@ export function getPublicConfig(config: AppConfig) {
     hasAdminApiKey: config.adminApiKey.length > 0,
     hasMetaAppSecret: config.metaAppSecret.length > 0,
     hasInstagramAccessToken: config.instagramAccessToken.length > 0,
+    instagramTokenAutoRefreshEnabled: config.instagramTokenAutoRefreshEnabled,
+    tokenNotificationsConfigured: Boolean(config.telegramBotToken && config.telegramChatId),
   };
 }
 
