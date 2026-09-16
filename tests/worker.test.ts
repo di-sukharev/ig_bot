@@ -169,9 +169,7 @@ describe("scheduled reply sender", () => {
     expect(meta.publicReplies).toEqual([
       {
         commentId: "public_1",
-        text: drainConfig.commentReplyRules.find((rule) =>
-          rule.keywords.includes("🔥"),
-        )?.publicReplyText,
+        text: expect.stringMatching(/\p{Extended_Pictographic}/u),
       },
     ]);
     expect(repo.jobs.get("comment_public_reply:public_1")?.status).toBe("sent");

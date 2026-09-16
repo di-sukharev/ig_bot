@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import type { AppConfig } from "../src/env";
 import type { BotRepository } from "../src/db/repository";
 import { MetaApiError, type MetaGraphClient } from "../src/meta/client";
@@ -284,6 +284,88 @@ describe("comment processing", () => {
       { commentId: "comment_1", text: "old public" },
     ]);
   });
+
+  test("snapshots a random public reply per comment through duplicates and send retries", async () => {
+    const repo = new FakeRepo();
+    const meta = new FakeMetaClient();
+    const rules = configWithRules([["хочу", { private: "reply" }]], {
+      COMMENT_PUBLIC_REPLY_ENABLED: "true",
+    });
+    const base = {
+      config: rules,
+      repo: repo as unknown as BotRepository,
+      metaClient: meta as unknown as MetaGraphClient,
+      now: new Date("2026-05-05T12:00:00.000Z"),
+      allowReplies: true,
+      sendImmediately: false,
+    };
+    const random = spyOn(Math, "random");
+    try {
+      random.mockReturnValue(0);
+      await processComment({ ...base, comment: comment() });
+      const privateJob = repo.jobs.get("comment_private_reply:comment_1")!;
+      const selectedText = privateJob.publicSuccessReplyText;
+      expect(selectedText).toMatch(/\p{Extended_Pictographic}/u);
+
+      random.mockReturnValue(0.99);
+      await processComment({ ...base, comment: comment({ id: "comment_2" }) });
+      expect(repo.jobs.get("comment_private_reply:comment_2")?.publicSuccessReplyText)
+        .not.toBe(selectedText);
+      await processComment({ ...base, comment: comment() });
+      expect(privateJob.publicSuccessReplyText).toBe(selectedText);
+      expect(meta.publicReplies).toEqual([]);
+
+      meta.privateError = new Error("temporary private reply failure");
+      await processReplyJob({ ...base, jobId: privateJob.id });
+      expect(privateJob.status).toBe("retryable");
+      expect(meta.publicReplies).toEqual([]);
+
+      meta.privateError = undefined;
+      meta.publicError = new Error("temporary public reply failure");
+      const changedConfig = configWithRules([
+        ["хочу", { public: "new override", private: "new private" }],
+      ], { COMMENT_PUBLIC_REPLY_ENABLED: "true" });
+      await processReplyJob({ ...base, config: changedConfig, jobId: privateJob.id });
+      const publicJob = repo.jobs.get("comment_public_reply:comment_1")!;
+      expect(publicJob.status).toBe("retryable");
+      expect(publicJob.replyText).toBe(selectedText);
+
+      meta.publicError = undefined;
+      await processReplyJob({ ...base, config: changedConfig, jobId: publicJob.id });
+      expect(meta.privateReplies).toEqual([{ commentId: "comment_1", text: "reply" }]);
+      expect(meta.publicReplies).toEqual([{ commentId: "comment_1", text: selectedText }]);
+    } finally {
+      random.mockRestore();
+    }
+  });
+
+  test.each(["comment_private_reply", "comment_public_reply"] as const)(
+    "uses a universal reply for a legacy %s job without a public snapshot",
+    async (type) => {
+      const repo = new FakeRepo();
+      const meta = new FakeMetaClient();
+      const rules = configWithRules([["хочу", { private: "reply" }]], {
+        COMMENT_PUBLIC_REPLY_ENABLED: "true",
+      });
+      const now = new Date("2026-05-05T12:00:00.000Z");
+      const { job } = await repo.createReplyJob({
+        commentId: "comment_1",
+        type,
+        maxAttempts: 3,
+        now: now.toISOString(),
+      });
+
+      expect(await processReplyJob({
+        config: rules,
+        repo: repo as unknown as BotRepository,
+        metaClient: meta as unknown as MetaGraphClient,
+        jobId: job.id,
+        now,
+      })).toBe(true);
+      expect(meta.publicReplies).toHaveLength(1);
+      expect(meta.publicReplies[0]?.text).toMatch(/\p{Extended_Pictographic}/u);
+    },
+  );
 
   test("queues only public jobs when private comment replies are disabled", async () => {
     const repo = new FakeRepo();

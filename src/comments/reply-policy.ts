@@ -1,7 +1,11 @@
 import type { AppConfig } from "../env";
 import type { CommentRecord, NormalizedComment, ReplyJobType } from "../types";
 import { matchCommentKeyword } from "./matching";
-import { findCommentReplyRule, type CommentReplyRule } from "./reply-rules";
+import {
+  findCommentReplyRule,
+  getPublicCommentReplyText,
+  type CommentReplyRule,
+} from "./reply-rules";
 
 export type ConversationStatus = "clear" | "exists" | "unknown";
 export type BasicCommentReplySkipReason =
@@ -72,23 +76,25 @@ export function planCommentReplyJobs(
   config: AppConfig,
   rule: CommentReplyRule | undefined,
 ): CommentReplyJobPlan {
+  const publicReplyText = config.commentPublicReplyEnabled
+    ? getPublicCommentReplyText(rule)
+    : undefined;
+
   if (config.commentPrivateReplyEnabled && rule?.privateReplyText) {
     return [
       {
         type: "comment_private_reply",
         replyText: rule.privateReplyText,
-        publicSuccessReplyText: config.commentPublicReplyEnabled
-          ? rule.publicReplyText
-          : undefined,
+        publicSuccessReplyText: publicReplyText,
       },
     ];
   }
 
-  if (config.commentPublicReplyEnabled && rule?.publicReplyText) {
+  if (publicReplyText) {
     return [
       {
         type: "comment_public_reply",
-        replyText: rule.publicReplyText,
+        replyText: publicReplyText,
       },
     ];
   }

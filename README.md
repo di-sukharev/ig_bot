@@ -121,7 +121,6 @@ Example:
 [
   {
     "keywords": ["demo", "хочу", "спасибо"],
-    "public": "public reply",
     "private": "dm reply"
   }
 ]
@@ -130,11 +129,18 @@ Example:
 Fields:
 
 - `keywords`: a non-empty array of keywords, or a comma-separated string.
-- `public`: optional text for a public comment reply.
+- `public`: optional override for the public comment reply. When omitted or blank,
+  one of 20 universal Russian replies with different emoji is chosen randomly for
+  each comment. Add `"public": "your custom reply"` to a rule to use that text instead.
 - `private`: optional text for a private comment reply or Direct reply.
 - `always`: optional boolean. When `true`, comment replies skip the existing-conversation gate.
 
 At least one of `public` or `private` must be present. Direct replies use only `private`.
+
+Public replies still require `COMMENT_PUBLIC_REPLY_ENABLED=true`. When a private
+reply is queued, the chosen public text is saved with the job and sent only after
+the private reply succeeds. Retries and duplicate events keep the saved text.
+Random selection is independent for each comment, so repeats are possible.
 
 Automatic comment replies only match comments with at most one word made of letters or
 digits. Emoji and punctuation do not count as words, so `хочу 🔥🙌` is accepted,

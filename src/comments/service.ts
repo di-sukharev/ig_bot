@@ -20,7 +20,11 @@ import {
   planCommentReplyJobs,
   shouldBypassExistingConversation,
 } from "./reply-policy";
-import { findCommentReplyRule, type CommentReplyRule } from "./reply-rules";
+import {
+  findCommentReplyRule,
+  getPublicCommentReplyText,
+  type CommentReplyRule,
+} from "./reply-rules";
 import { decideRetry } from "./retry";
 
 const REPLY_JOB_LEASE_MS = 10 * 60 * 1000;
@@ -609,7 +613,7 @@ async function createAndProcessPublicSuccessJob(input: {
 
   const replyText =
     input.sourceJob.publicSuccessReplyText ??
-    getMatchedReplyRuleForComment(input.config, input.comment)?.publicReplyText;
+    getPublicCommentReplyText(getMatchedReplyRuleForComment(input.config, input.comment));
   if (!replyText) {
     return;
   }
@@ -796,7 +800,7 @@ function getReplyTextForRule(
   }
 
   return type === "comment_public_reply"
-    ? rule.publicReplyText
+    ? getPublicCommentReplyText(rule)
     : rule.privateReplyText;
 }
 

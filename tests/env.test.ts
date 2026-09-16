@@ -18,7 +18,7 @@ describe("env config", () => {
     expect(config.commentKeywords).toContain("demo");
     expect(config.backfillReplyEnabled).toBe(true);
     expect(config.commentPublicReplyEnabled).toBe(true);
-    expect(config.commentReplyRules[0]?.publicReplyText).toBe("public reply");
+    expect(config.commentReplyRules[0]?.publicReplyText).toBeUndefined();
     expect(config.commentReplyRules[0]?.privateReplyText).toBe("dm reply");
   });
 

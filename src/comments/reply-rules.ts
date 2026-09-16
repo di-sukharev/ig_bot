@@ -17,6 +17,40 @@ export type CommentReplyRuleDefinition = readonly [
   },
 ];
 
+const DEFAULT_PUBLIC_REPLIES = [
+  "в директ отправил 🐙",
+  "отправил в личку 🦊",
+  "уже в директе 🐿️",
+  "всё в личке 🐢",
+  "загляните в директ 🦋",
+  "готово, отправил в личку 🐝",
+  "сообщение уже в директе 🐳",
+  "отправил, проверьте личку 🦉",
+  "ловите в директе 🦦",
+  "ответ ждёт в личке 🐧",
+  "готово, всё в директе 🦀",
+  "уже отправил в личные сообщения 🦔",
+  "доставил в директ 🦥",
+  "проверьте директ, всё отправил 🦜",
+  "в личку улетело 🐞",
+  "забирайте в директе 🐬",
+  "сообщение отправлено в личку 🦭",
+  "смотрите личные сообщения 🐨",
+  "в директе уже ждёт 🦩",
+  "отправил, загляните в личку 🐌",
+] as const;
+
+export function getPublicCommentReplyText(
+  rule: CommentReplyRule | undefined,
+): string | undefined {
+  if (!rule) {
+    return undefined;
+  }
+
+  return rule.publicReplyText ??
+    DEFAULT_PUBLIC_REPLIES[Math.floor(Math.random() * DEFAULT_PUBLIC_REPLIES.length)];
+}
+
 const commentReplyRuleConfigSchema = z.object({
   keywords: z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]),
   public: z.string().optional(),
